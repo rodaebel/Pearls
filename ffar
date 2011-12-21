@@ -1,0 +1,143 @@
+#!/bin/sh
+# ffar - full find and replace
+#
+# Copyright (c) 2011, Tobias Rodaebel
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+VERSION=2.0
+BASENAME=`basename $0`
+VERBOSE="0"
+DRY="0"
+SKIP="0"
+EXCLUDE_PATTERN=""
+
+function version
+{
+    echo ${VERSION};
+    exit 0;
+}
+
+function usage
+{
+    echo "Usage: $BASENAME [-dhv] string1 string2";
+}
+
+function find_and_replace
+{
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        usage;
+        exit 1;
+    fi
+    l=""
+    for f in `find . -name "$1*"`; do
+        l="$f $l"
+    done
+    for f in $l; do
+        n=`echo "$f" | awk "{sub(\"$1\", \"$1\n\"); print;}" | grep -c $1`
+        sub="s,$1,$2,"$n;
+        dest=`echo $f | sed -e $sub`;
+        if [ ! -z "$EXCLUDE_PATTERN" ]; then
+            SKIP=`echo $f | grep -c -e $EXCLUDE_PATTERN`;
+        fi
+        if [ "$VERBOSE" = "1" ]; then
+            if [ "$SKIP" = "0" ]; then
+                echo "renaming $f to $dest";
+            else
+                echo "skipping $f";
+            fi
+        fi
+        if [ "$SKIP" = "0" ] && [ "$DRY" = "0" ]; then
+            mv $f $dest;
+        fi
+    done
+    l=`find . -type f | xargs grep -l $1`
+    for f in $l; do
+        if [ ! -z "$EXCLUDE_PATTERN" ]; then
+            SKIP=`echo $f | grep -c -e $EXCLUDE_PATTERN`;
+        fi
+        tmp=`mktemp $f.XXXXXX`;
+        if [ "$SKIP" = "0" ]; then
+            sed -e "s,$1,$2,g" $f > "$tmp";
+        fi
+        if [ "$VERBOSE" = "1" ]; then
+            if [ "$SKIP" = "0" ]; then
+                diff -u $f $tmp;
+            else
+                echo "skipping $f";
+            fi
+        fi
+        if [ "$SKIP" = "0" ]; then
+            if [ "$DRY" = "0" ]; then
+                mv "$tmp" $f;
+            else
+                rm -f "$tmp";
+            fi
+        fi
+    done
+}
+
+for _option
+do
+
+   # If the previous option needs an argument, assign it.
+   if test -n "$_prev"; then
+      eval "$_prev=\$_option"
+      _prev=
+      continue
+   fi
+
+   case "$_option" in
+   -*=*) _optarg=`echo "$_option" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+   *) _optarg= ;;
+   esac
+
+   case "$_option" in
+
+   --dry | -d)
+      DRY="1" ;;
+
+   --help | -h)
+      usage;
+      cat << EOF
+
+Options:
+   -d,--dry             run dry
+   -h,--help            display this message
+      --skip=PATTERN    skip directories and files containing PATTERN
+   -v,--verbose         print verbose messages to standard output
+      --version         print version number, then exit
+
+EOF
+   exit 0;;
+ 
+   --skip=*)
+      EXCLUDE_PATTERN="$_optarg" ;;
+
+   --verbose | -v)
+      VERBOSE="1" ;;
+
+   --version)
+      version ;;
+
+   --* | -* ) { echo "error: invalid option $_option; use --help to show usage" 1>&2; exit 1; };;
+   * )
+      args="$args$_option " ;;
+
+   esac
+done
+
+find_and_replace $args;
+
+exit 0;

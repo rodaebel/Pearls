@@ -1,0 +1,82 @@
+#!/bin/sh
+#
+# Tiny bash script to make automatically reconnecting ssh tunnels.
+#
+# Copyright (c) 2010, Tobias Rodaebel
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Usage:
+#
+# The following sample makes a ssh connection to example.com and forwards the
+# remote port 8080 to the local port 8080. The connection will be automatically
+# reestablished after 5 seconds.
+#
+# $ mktunnel --reconnect=5 -i ~/.ssh/me -L 8080:example.com:8080 me@example.com
+#
+
+BASENAME=`basename $0`
+RECONNECT=0
+
+usage() {
+   echo "Usage: $BASENAME [options] <ssh options>";
+}
+
+for _option
+do
+   # If the previous option needs an argument, assign it.
+   if test -n "$_prev"; then
+      eval "$_prev=\$_option"
+      _prev=
+      continue
+   fi
+
+   case "$_option" in
+   -*=*) _optarg=`echo "$_option" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+   *) _optarg= ;;
+   esac
+
+   case "$_option" in
+
+   --help | -h)
+      usage
+      cat << EOF
+
+Options:
+   -h,--help                display this message
+      --reconnect=SECONDS   automatically reconnect after SECONDS
+
+EOF
+   exit 0;;
+
+   --reconnect=*)
+      RECONNECT="$_optarg" ;;
+
+   * )
+      args="$args$_option " ;;
+
+   esac
+done
+
+if [ "$args" = "" ]; then
+    usage;
+    exit 1;
+fi
+
+if [ "$RECONNECT" != 0 ]; then
+    while True; do (ssh $args; echo "reconnecting ..."; sleep $RECONNECT); done
+else
+    exec ssh $args
+fi
+
+exit 0;
